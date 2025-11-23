@@ -71,72 +71,121 @@ st.title("🛒 Product Review Analyzer — Auto Updated Dashboard")
 
 st.markdown("This dashboard displays the latest crawled review data along with predictions.")
 
-# -------------------------
-# 1️⃣ SUMMARY GRID
-# -------------------------
-st.subheader("📊 Dataset Summary")
+# =========================
+# Summary Statistics
+# =========================
+st.title("📊 Review Analytics Dashboard")
 
-col1, col2, col3, col4 = st.columns(4)
+latest_time = pd.to_datetime(df['crawl_time']).max()
+num_reviews = len(df)
+num_customers = df['customer_id'].nunique() if 'customer_id' in df.columns else 0
+num_sellers = df['seller_id'].nunique() if 'seller_id' in df.columns else 0
 
-with col1:
-    st.metric("Last Updated", df["crawl_time"].max() if "crawl_time" in df.columns else "N/A")
+summary_df = pd.DataFrame({
+    "Metric": [
+        "Latest Crawl Time",
+        "Number of Reviews",
+        "Number of Customers",
+        "Number of Sellers"
+    ],
+    "Value": [
+        latest_time,
+        num_reviews,
+        num_customers,
+        num_sellers
+    ]
+})
 
-with col2:
-    st.metric("Total Reviews", len(df))
+# ===== Custom column widths using HTML/CSS =====
+st.subheader("📌 Summary")
+st.markdown("""
+<style>
+.summary-table td:nth-child(1) { width: 200px !important; }
+.summary-table td:nth-child(2) { width: 300px !important; }
+</style>
+""", unsafe_allow_html=True)
 
-with col3:
-    st.metric("Unique Customers", df["customer_id"].nunique())
+st.table(summary_df.style.set_table_attributes('class="summary-table"'))
 
-with col4:
-    st.metric("Unique Sellers", df["seller_id"].nunique())
 
-# -------------------------
-# 2️⃣ CHARTS
-# -------------------------
-st.subheader("📈 Class Distribution per Aspect")
+# =========================
+# Chart Grid: Class Distribution per Aspect
+# =========================
+st.subheader("📊 Class Distribution per Aspect")
 
-aspects = {
-    "spam_pred": "Spam Classification",
-    "frequency_pred": "Shopping Frequency",
-    "origin_pred": "Product Origin",
-    "price_pred": "Price Sentiment",
-    "quality_pred": "Product Quality",
-    "service_pred": "Delivery Service"
-}
+aspects = ["spam_pred", "quality_pred", "service_pred", "origin_pred", "price_pred", "frequency_pred"]
 
-for col, title in aspects.items():
-    st.write(f"### 🔹 {title}")
-    fig, ax = plt.subplots()
-    sns.countplot(x=df[col], ax=ax)
-    ax.set_title(f"Distribution of {title}")
-    st.pyplot(fig)
+n_cols = 3
+# Loop through aspects in chunks of 3
+for i in range(0, len(aspects), n_cols):
+    row_aspects = aspects[i : i + n_cols]
+    cols = st.columns(n_cols)
 
-# -------------------------
-# 3️⃣ TOP 5 REVIEWS PER CLASS
-# -------------------------
-st.subheader("🏆 Top 5 Reviews per Class")
+    for col, aspect in zip(cols, row_aspects):
+        with col:
+            fig, ax = plt.subplots()
+            df[aspect].value_counts().plot(kind='bar', ax=ax)
+            ax.set_title(f"Distribution of {aspect}")
+            st.pyplot(fig)
 
-aspect_choice = st.selectbox("Choose aspect:", list(aspects.keys()))
-classes = df[aspect_choice].unique()
+# =========================
+# Top Reviews per Class (2 × 2 tables)
+# =========================
+st.subheader("🌟 Top Reviews (<30 words) by Class")
 
-for cls in classes:
-    st.write(f"### 🔸 {cls}")
-    top_reviews = df[df[aspect_choice] == cls].head(5)[["content"]]
-    for i, row in top_reviews.iterrows():
-        st.write(f"- {row['content']}")
+# Function to get short reviews
+def get_short_reviews(df, column, label, n=5):
+    subset = df[(df[column] == label) & (df['review'].str.split().str.len() < 30)]
+    return subset[['review']].head(n)
 
-# -------------------------
-# 4️⃣ WORDCLOUD
-# -------------------------
-st.subheader("☁ WordCloud of All Reviews")
+for aspect in aspects:
+    st.write(f"### 🔷 {aspect.replace('_pred','').title()}")
 
-all_text = " ".join(df["content"].fillna("").astype(str).tolist())
-wc = WordCloud(width=800, height=400, background_color="white").generate(all_text)
+    # Detect classes dynamically from data
+    aspect_classes = df[aspect].dropna().unique().tolist()
 
-fig_wc, ax_wc = plt.subplots(figsize=(10, 5))
-ax_wc.imshow(wc, interpolation="bilinear")
-ax_wc.axis("off")
-st.pyplot(fig_wc)
+    # Sort classes for consistent layout
+    priority_order = ["good", "positive", "yes", "neutral", "neu", "bad", "negative", "no", "na"]
+    aspect_classes = sorted(aspect_classes, key=lambda x: priority_order.index(x) if x in priority_order else 999)
+
+    # 2×2 layout
+    c1, c2 = st.columns(2)
+
+    # Fill each column with up to 2 classes
+    left_classes = aspect_classes[:2]
+    right_classes = aspect_classes[2:4]
+
+    with c1:
+        for cls in left_classes:
+            st.markdown(f"#### {cls.upper()}")
+            st.table(get_short_reviews(df, aspect, cls))
+
+    with c2:
+        for cls in right_classes:
+            st.markdown(f"#### {cls.upper()}")
+            st.table(get_short_reviews(df, aspect, cls))
+
+    # If more than 4 classes, show remaining below
+    if len(aspect_classes) > 4:
+        st.warning(f"Aspect **{aspect}** has more than 4 classes. Showing extra below:")
+        for cls in aspect_classes[4:]:
+            st.markdown(f"#### {cls.upper()}")
+            st.table(get_short_reviews(df, aspect, cls))
+
+
+# =========================
+# WordCloud
+# =========================
+st.subheader("☁️ WordCloud of Customer Reviews")
+
+text = " ".join(df['review'].astype(str).tolist())
+
+wc = WordCloud(width=800, height=400).generate(text)
+
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.imshow(wc, interpolation='bilinear')
+ax.axis("off")
+st.pyplot(fig)
 
 # -------------------------
 # Allow user to analyze one review
