@@ -134,51 +134,42 @@ for i in range(0, len(aspects), n_cols):
 st.subheader("🌟 Top Reviews (<30 words) by Class")
 
 # Function to get short reviews
-def get_short_reviews(df, column, label, n=5):
+def get_short_reviews(df, column, label, n=3):
     subset = df[(df[column] == label) & (df['content'].str.split().str.len() < 30)]
     return subset[['content']].head(n)
 
 for aspect in aspects:
-    st.write(f"### 🔷 {aspect.replace('_pred','').title()}")
+    st.markdown(f"### 🔷 {aspect.replace('_pred','').title()}")
 
-    # Detect classes dynamically from data
-    aspect_classes = df[aspect].dropna().unique().tolist()
+    # Detect available classes dynamically
+    aspect_classes = sorted(df[aspect].dropna().unique().tolist())
 
-    # Sort classes for consistent layout
-    priority_order = ["good", "positive", "yes", "neutral", "neu", "bad", "negative", "no", "na"]
-    aspect_classes = sorted(aspect_classes, key=lambda x: priority_order.index(x) if x in priority_order else 999)
+    # Build a DataFrame where each column is a class
+    table_dict = {}
 
-    # 2×2 layout
-    c1, c2 = st.columns(2)
+    # max 3 reviews per class
+    max_rows = 3
 
-    # Fill each column with up to 2 classes
-    left_classes = aspect_classes[:2]
-    right_classes = aspect_classes[2:4]
+    for cls in aspect_classes:
+        reviews = get_short_reviews(df, aspect, cls, n=max_rows)
 
-    with c1:
-        for cls in left_classes:
-            st.markdown(f"#### {cls.upper()}")
-            st.table(get_short_reviews(df, aspect, cls))
+        # pad with empty strings so all columns have equal rows
+        if len(reviews) < max_rows:
+            reviews += [""] * (max_rows - len(reviews))
 
-    with c2:
-        for cls in right_classes:
-            st.markdown(f"#### {cls.upper()}")
-            st.table(get_short_reviews(df, aspect, cls))
+        table_dict[cls.upper()] = reviews
 
-    # If more than 4 classes, show remaining below
-    if len(aspect_classes) > 4:
-        st.warning(f"Aspect **{aspect}** has more than 4 classes. Showing extra below:")
-        for cls in aspect_classes[4:]:
-            st.markdown(f"#### {cls.upper()}")
-            st.table(get_short_reviews(df, aspect, cls))
+    # Convert to table
+    aspect_table = pd.DataFrame(table_dict)
 
+    st.table(aspect_table)
 
 # =========================
 # WordCloud
 # =========================
 st.subheader("☁️ WordCloud of Customer Reviews")
 
-text = " ".join(df['review'].astype(str).tolist())
+text = " ".join(df['content'].astype(str).tolist())
 
 wc = WordCloud(width=800, height=400).generate(text)
 
