@@ -135,8 +135,8 @@ st.subheader("🌟 Top Reviews (<30 words) by Class")
 
 # Function to get short reviews
 def get_short_reviews(df, column, label, n=5):
-    subset = df[(df[column] == label) & (df['review'].str.split().str.len() < 30)]
-    return subset[['review']].head(n)
+    subset = df[(df[column] == label) & (df['content'].str.split().str.len() < 30)]
+    return subset[['content']].head(n)
 
 for aspect in aspects:
     st.write(f"### 🔷 {aspect.replace('_pred','').title()}")
