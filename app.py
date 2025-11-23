@@ -131,11 +131,11 @@ for i in range(0, len(aspects), n_cols):
 # =========================
 # Top Reviews per Class (2 × 2 tables)
 # =========================
-st.subheader("🌟 Top Reviews (<30 words) by Class")
+st.subheader("🌟 Top Reviews by Class")
 
 # Function to get short reviews
-def get_short_reviews(df, column, label, n=5):
-    subset = df[(df[column] == label) & (df['content'].str.split().str.len() < 30)]
+def get_short_reviews(df, column, label, n=2):
+    subset = df[(df[column] == label) & (df['content'].str.split().str.len() < 100)]
     
     # always return a list
     reviews = subset['content'].head(n).tolist()
@@ -154,10 +154,10 @@ for aspect in aspects:
     aspect_classes = sorted(df[aspect].dropna().unique().tolist())
 
     table_dict = {}
-    max_rows = 5
+    max_rows = 2
 
     for cls in aspect_classes:
-        # ALWAYS returns a list of 5 items
+        # ALWAYS returns a list of 2 items
         table_dict[cls.upper()] = get_short_reviews(df, aspect, cls, max_rows)
 
     # Build the table (now safe)
