@@ -135,10 +135,10 @@ st.subheader("🌟 Top Reviews (<30 words) by Class")
 
 # Function to get short reviews
 def get_short_reviews(df, column, label, n=5):
-    subset = df[(df[column] == label) & (df['review'].str.split().str.len() < 30)]
+    subset = df[(df[column] == label) & (df['content'].str.split().str.len() < 30)]
     
     # always return a list
-    reviews = subset['review'].head(n).tolist()
+    reviews = subset['content'].head(n).tolist()
 
     # pad to n rows
     if len(reviews) < n:
