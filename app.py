@@ -4,96 +4,154 @@ import joblib
 import re
 import os
 from src.clean_text import clean_text
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+import seaborn as sns
 
-st.title("Product Review Multi-Aspect Classification Demo")
+# -------------------------
+# LOAD MODELS
+# -------------------------
+@st.cache_resource
+def load_all_models():
+    models = {
+        "vectorizer": joblib.load("trained_models/tfidf_vectorizer.pkl"),
 
-# ===============================
-# 1. LOAD ALL MODELS
-# ===============================
+        "spam_clf": joblib.load("trained_models/spam_clf.pkl"),
+        "spam_enc": joblib.load("trained_models/spam_encoder.pkl"),
 
-tfidf = joblib.load("trained_models/tfidf_vectorizer.pkl")
+        "freq_clf": joblib.load("trained_models/frequency_clf.pkl"),
+        "freq_enc": joblib.load("trained_models/frequency_encoder.pkl"),
 
-spam_clf = joblib.load("trained_models/spam_clf.pkl")
-spam_encoder = joblib.load("trained_models/spam_encoder.pkl")
+        "origin_clf": joblib.load("trained_models/origin_clf.pkl"),
+        "origin_enc": joblib.load("trained_models/origin_encoder.pkl"),
 
-frequency_clf = joblib.load("trained_models/frequency_clf.pkl")
-frequency_encoder = joblib.load("trained_models/frequency_encoder.pkl")
+        "price_clf": joblib.load("trained_models/price_clf.pkl"),
+        "price_enc": joblib.load("trained_models/price_encoder.pkl"),
 
-origin_clf = joblib.load("trained_models/origin_clf.pkl")
-origin_encoder = joblib.load("trained_models/origin_encoder.pkl")
+        "quality_clf": joblib.load("trained_models/quality_clf.pkl"),
+        "quality_enc": joblib.load("trained_models/quality_encoder.pkl"),
 
-price_clf = joblib.load("trained_models/price_clf.pkl")
-price_encoder = joblib.load("trained_models/price_encoder.pkl")
+        "service_clf": joblib.load("trained_models/service_clf.pkl"),
+        "service_enc": joblib.load("trained_models/service_encoder.pkl"),
+    }
+    return models
 
-quality_clf = joblib.load("trained_models/quality_clf.pkl")
-quality_encoder = joblib.load("trained_models/quality_encoder.pkl")
+models = load_all_models()
 
-service_clf = joblib.load("trained_models/service_clf.pkl")
-service_encoder = joblib.load("trained_models/service_encoder.pkl")
+# -------------------------
+# LOAD DATA
+# -------------------------
+DATA_PATH = "updated_reviews.csv"
+@st.cache_data
+def load_data():
+    df = pd.read_csv(DATA_PATH)
+    return df
+df = load_data()
 
-# ===============================
-# 2. LOAD CRAWLED CSV AUTOMATICALLY
-# ===============================
+# Preprocess + Predict all dataset
+def predict_all(df):
+    clean_texts = df["content"].fillna("").apply(clean_text)
+    vectors = models["vectorizer"].transform(clean_texts)
 
-CRAWLED_CSV_PATH = "updated_reviews.csv"  # path where GitHub Action or your crawler saves the CSV
+    df["spam_pred"] = models["spam_enc"].inverse_transform(models["spam_clf"].predict(vectors))
+    df["frequency_pred"] = models["freq_enc"].inverse_transform(models["freq_clf"].predict(vectors))
+    df["origin_pred"] = models["origin_enc"].inverse_transform(models["origin_clf"].predict(vectors))
+    df["price_pred"] = models["price_enc"].inverse_transform(models["price_clf"].predict(vectors))
+    df["quality_pred"] = models["quality_enc"].inverse_transform(models["quality_clf"].predict(vectors))
+    df["service_pred"] = models["service_enc"].inverse_transform(models["service_clf"].predict(vectors))
 
-if not os.path.exists(CRAWLED_CSV_PATH):
-    st.error(f"CSV file not found at {CRAWLED_CSV_PATH}. Make sure your crawler saved it.")
-    st.stop()
+    return df
 
-df = pd.read_csv(CRAWLED_CSV_PATH)
+df = predict_all(df)
 
-if "content" not in df.columns:
-    st.error("CSV must contain a 'content' column.")
-    st.stop()
+# -------------------------
+#  UI START
+# -------------------------
+st.title("🛒 Product Review Analyzer — Auto Updated Dashboard")
 
-st.write("### Sample of crawled reviews:")
-st.write(df.head())
+st.markdown("This dashboard displays the latest crawled review data along with predictions.")
 
+# -------------------------
+# 1️⃣ SUMMARY GRID
+# -------------------------
+st.subheader("📊 Dataset Summary")
 
-# ===============================
-# 4. CLEAN TEXT + TF-IDF TRANSFORM
-# ===============================
+col1, col2, col3, col4 = st.columns(4)
 
-df["clean_text"] = df["content"].astype(str).apply(clean_text)
-X = tfidf.transform(df["clean_text"])
+with col1:
+    st.metric("Last Updated", df["crawl_time"].max() if "crawl_time" in df.columns else "N/A")
 
+with col2:
+    st.metric("Total Reviews", len(df))
 
-# ===============================
-# 5. PREDICT ALL ASPECTS
-# ===============================
+with col3:
+    st.metric("Unique Customers", df["customer_id"].nunique())
 
-df["spam"] = spam_encoder.inverse_transform(spam_clf.predict(X))
+with col4:
+    st.metric("Unique Sellers", df["seller_id"].nunique())
 
-df["sent_frequency"] = frequency_encoder.inverse_transform(frequency_clf.predict(X))
-df["sent_origin"] = origin_encoder.inverse_transform(origin_clf.predict(X))
-df["sent_price"] = price_encoder.inverse_transform(price_clf.predict(X))
-df["sent_quality"] = quality_encoder.inverse_transform(quality_clf.predict(X))
-df["sent_service"] = service_encoder.inverse_transform(service_clf.predict(X))
+# -------------------------
+# 2️⃣ CHARTS
+# -------------------------
+st.subheader("📈 Class Distribution per Aspect")
 
+aspects = {
+    "spam_pred": "Spam Classification",
+    "frequency_pred": "Shopping Frequency",
+    "origin_pred": "Product Origin",
+    "price_pred": "Price Sentiment",
+    "quality_pred": "Product Quality",
+    "service_pred": "Delivery Service"
+}
 
-# ===============================
-# 6. SHOW RESULTS
-# ===============================
-st.write("### Predictions for latest reviews:")
-st.write(df[[
-    "content",
-    "spam",
-    "sent_frequency",
-    "sent_origin",
-    "sent_price",
-    "sent_quality",
-    "sent_service"
-]].tail(50))
+for col, title in aspects.items():
+    st.write(f"### 🔹 {title}")
+    fig, ax = plt.subplots()
+    sns.countplot(x=df[col], ax=ax)
+    ax.set_title(f"Distribution of {title}")
+    st.pyplot(fig)
 
+# -------------------------
+# 3️⃣ TOP 5 REVIEWS PER CLASS
+# -------------------------
+st.subheader("🏆 Top 5 Reviews per Class")
 
-# ===============================
-# 7. EXPORT CSV
-# ===============================
+aspect_choice = st.selectbox("Choose aspect:", list(aspects.keys()))
+classes = df[aspect_choice].unique()
 
-st.download_button(
-    label="Download Predicted CSV",
-    data=df.to_csv(index=False),
-    file_name="predicted_reviews.csv",
-    mime="text/csv"
-)
+for cls in classes:
+    st.write(f"### 🔸 {cls}")
+    top_reviews = df[df[aspect_choice] == cls].head(5)[["content"]]
+    for i, row in top_reviews.iterrows():
+        st.write(f"- {row['content']}")
+
+# -------------------------
+# 4️⃣ WORDCLOUD
+# -------------------------
+st.subheader("☁ WordCloud of All Reviews")
+
+all_text = " ".join(df["content"].fillna("").astype(str).tolist())
+wc = WordCloud(width=800, height=400, background_color="white").generate(all_text)
+
+fig_wc, ax_wc = plt.subplots(figsize=(10, 5))
+ax_wc.imshow(wc, interpolation="bilinear")
+ax_wc.axis("off")
+st.pyplot(fig_wc)
+
+# -------------------------
+# Allow user to analyze one review
+# -------------------------
+st.subheader("🔍 Analyze a Single Review")
+
+review = st.selectbox("Pick a review:", df["content"].dropna().tail(100))
+cleaned = clean_text(review)
+vector = models["vectorizer"].transform([cleaned])
+
+st.write({
+    "Spam": models["spam_enc"].inverse_transform(models["spam_clf"].predict(vector))[0],
+    "Frequency": models["freq_enc"].inverse_transform(models["freq_clf"].predict(vector))[0],
+    "Origin": models["origin_enc"].inverse_transform(models["origin_clf"].predict(vector))[0],
+    "Price": models["price_enc"].inverse_transform(models["price_clf"].predict(vector))[0],
+    "Quality": models["quality_enc"].inverse_transform(models["quality_clf"].predict(vector))[0],
+    "Service": models["service_enc"].inverse_transform(models["service_clf"].predict(vector))[0],
+})

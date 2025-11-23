@@ -21,7 +21,7 @@ if os.path.exists(CSV_PATH):
     df_base = pd.read_csv(CSV_PATH)
     print(f"✅ Loaded existing CSV with {len(df_base)} rows")
 else:
-    df_base = pd.DataFrame(columns=['product_id','seller_id','review_id','customer_id','rating','content','created_time'])
+    df_base = pd.DataFrame(columns=['product_id','seller_id','review_id','customer_id','rating','content','created_time','crawl_time'])
     print("⚠ No existing CSV found, starting with empty DataFrame")
 
 # ------------------------------
@@ -111,6 +111,7 @@ def crawl_reviews(products, max_reviews=MAX_REVIEWS_PER_PRODUCT):
                         'rating': record.get('rating'),
                         'content': record.get('content'),
                         'created_time': created_time or datetime.now().isoformat()
+                        'crawl_time': datetime.now().isoformat()
                     })
                     count += 1
 
