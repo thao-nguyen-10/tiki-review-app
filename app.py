@@ -134,33 +134,34 @@ for i in range(0, len(aspects), n_cols):
 st.subheader("🌟 Top Reviews (<30 words) by Class")
 
 # Function to get short reviews
-def get_short_reviews(df, column, label, n=3):
-    subset = df[(df[column] == label) & (df['content'].str.split().str.len() < 30)]
-    return subset[['content']].head(n)
+def get_short_reviews(df, column, label, n=5):
+    subset = df[(df[column] == label) & (df['review'].str.split().str.len() < 30)]
+    
+    # always return a list
+    reviews = subset['review'].head(n).tolist()
+
+    # pad to n rows
+    if len(reviews) < n:
+        reviews += [""] * (n - len(reviews))
+
+    return reviews
+
 
 for aspect in aspects:
     st.markdown(f"### 🔷 {aspect.replace('_pred','').title()}")
 
-    # Detect available classes dynamically
+    # get unique classes
     aspect_classes = sorted(df[aspect].dropna().unique().tolist())
 
-    # Build a DataFrame where each column is a class
     table_dict = {}
-
-    # max 3 reviews per class
-    max_rows = 3
+    max_rows = 5
 
     for cls in aspect_classes:
-        reviews = get_short_reviews(df, aspect, cls, n=max_rows)
+        # ALWAYS returns a list of 5 items
+        table_dict[cls.upper()] = get_short_reviews(df, aspect, cls, max_rows)
 
-        # pad with empty strings so all columns have equal rows
-        if len(reviews) < max_rows:
-            reviews += [""] * (max_rows - len(reviews))
-
-        table_dict[cls.upper()] = reviews
-
-    # Convert to table
-    aspect_table = pd.DataFrame(table_dict)
+    # Build the table (now safe)
+    aspect_table = pd.DataFrame.from_dict(table_dict)
 
     st.table(aspect_table)
 
